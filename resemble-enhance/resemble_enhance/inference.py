@@ -25,8 +25,14 @@ def inference_chunk(model, dwav, sr, device, npad=441):
     dwav = dwav.to(device)
     dwav = dwav / abs_max  # Normalize
     dwav = F.pad(dwav, (0, npad))
-    hwav = model(dwav[None])[0].cpu()  # (T,)
-    hwav = hwav[:length]  # Trim padding
+    all_gpu = True
+    if(all_gpu):
+        # keep everything on gpu
+        hwav = model(dwav[None])[0]
+        hwav = hwav[:length]
+    else:
+        hwav = model(dwav[None])[0].cpu()  # (T,)
+        hwav = hwav[:length].to("cuda") # Trim padding
     hwav = hwav * abs_max  # Unnormalize
 
     return hwav
@@ -56,7 +62,7 @@ def compute_offset(chunk1, chunk2, sr=44100):
         n_mels=80,
         f_min=0.0,
         f_max=sr // 2,
-    )
+    ).to("cuda")
 
     spec1 = mel_fn(chunk1).log1p()
     spec2 = mel_fn(chunk2).log1p()

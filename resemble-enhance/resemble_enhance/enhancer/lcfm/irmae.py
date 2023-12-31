@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor, nn
@@ -45,6 +45,7 @@ class IRMAE(nn.Module):
         input_dim,
         output_dim,
         latent_dim,
+        run_mode,
         hidden_dim=1024,
         num_irms=4,
     ):
@@ -58,6 +59,7 @@ class IRMAE(nn.Module):
             norm: normalization layer
         """
         self.input_dim = input_dim
+        self.run_mode= run_mode
         super().__init__()
 
         self.encoder = nn.Sequential(
@@ -87,14 +89,18 @@ class IRMAE(nn.Module):
         Args:
             x: (b c t) tensor
         """
-        z = self.encoder(x)  # (b c t)
-        _ = self.estimator(z)  # Estimate the glboal mean and std of z
+        if self.run_mode == "fp_16":
+            x = x.to(torch.float16)
+        z = self.encoder(x).to(torch.float32)  # (b c t)
+        _ = self.estimator(z).to(torch.float32)  # Estimate the glboal mean and std of z
         self.stats = {}
         self.stats["z_mean"] = z.mean().item()
         self.stats["z_std"] = z.std().item()
         self.stats["z_abs_68"] = z.abs().quantile(0.6827).item()
         self.stats["z_abs_95"] = z.abs().quantile(0.9545).item()
         self.stats["z_abs_99"] = z.abs().quantile(0.9973).item()
+        if self.run_mode == "fp_16":
+            z = z.to(torch.float16)
         return z
 
     def decode(self, z):

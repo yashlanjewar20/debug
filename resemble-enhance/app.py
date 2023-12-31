@@ -1,16 +1,19 @@
 import gradio as gr
 import torch
 import torchaudio
+import os
+import time
 
 from resemble_enhance.enhancer.inference import denoise, enhance
+
 
 if torch.cuda.is_available():
     device = "cuda"
 else:
     device = "cpu"
+os.environ['GRADIO_TEMP_DIR'] = '/home/yash/temp'
 
-
-def _fn(path, solver, nfe, tau, denoising):
+def _fn(path, solver, nfe, tau, denoising, run_mode = "fp_16"):
     if path is None:
         return None, None
 
@@ -20,15 +23,26 @@ def _fn(path, solver, nfe, tau, denoising):
 
     dwav, sr = torchaudio.load(path)
     dwav = dwav.mean(dim=0)
+    
+    
+    dwav = dwav.to(device).to(torch.float32)
+    
+    start_time = time.time()
 
-    wav1, new_sr = denoise(dwav, sr, device)
-    wav2, new_sr = enhance(dwav, sr, device, nfe=nfe, solver=solver, lambd=lambd, tau=tau)
+    # wav1, new_sr = denoise(dwav, sr, device, run_mode)
+    wav2, new_sr = enhance(run_mode, dwav, sr, device, nfe=nfe, solver=solver, lambd=lambd, tau=tau)
 
-    wav1 = wav1.cpu().numpy()
+    end_time= time.time()
+    
+    duration = end_time - start_time
+    #print(f"Processing time: {duration} seconds")
+
+    
+    # wav1 = wav1.cpu().numpy()
     wav2 = wav2.cpu().numpy()
 
-    return (new_sr, wav1), (new_sr, wav2)
-
+    # return (new_sr, wav1), (new_sr, wav2)
+    return (new_sr, wav2)
 
 def main():
     inputs: list = [
@@ -37,6 +51,7 @@ def main():
         gr.Slider(minimum=1, maximum=128, value=64, step=1, label="CFM Number of Function Evaluations"),
         gr.Slider(minimum=0, maximum=1, value=0.5, step=0.01, label="CFM Prior Temperature"),
         gr.Checkbox(value=False, label="Denoise Before Enhancement"),
+        gr.Radio(["fp_16", "fp_32"] , label = "fp", default="")
     ]
 
     outputs: list = [

@@ -253,6 +253,7 @@ class CFM(nn.Module):
     solver_nfe: int = 32
     solver_method: str = "midpoint"
     time_mapping_divisor: int = 4
+    run_mode:str = "fp_32"
 
     def __post_init__(self):
         super().__init__()
@@ -262,11 +263,14 @@ class CFM(nn.Module):
             nfe=self.solver_nfe,
             method=self.solver_method,
             time_mapping_divisor=self.time_mapping_divisor,
+            
         )
         self.emb = SinusodialTimeEmbedding(self.time_emb_dim)
         self.net = WN(
+    
             input_dim=self.output_dim,
             output_dim=self.output_dim,
+            run_mode = self.run_mode,
             local_dim=self.cond_dim,
             global_dim=self.time_emb_dim,
         )

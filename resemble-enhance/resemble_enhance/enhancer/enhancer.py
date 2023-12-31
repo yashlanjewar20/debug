@@ -32,9 +32,10 @@ def _normalize_wav(x: Tensor):
 
 
 class Enhancer(nn.Module):
-    def __init__(self, hp: HParams):
+    def __init__(self, run_mode, hp: HParams):
         super().__init__()
         self.hp = hp
+        self.run_mode = run_mode
 
         n_mels = self.hp.num_mels
         vocoder_input_dim = n_mels + self.hp.vocoder_extra_dim
@@ -45,6 +46,7 @@ class Enhancer(nn.Module):
                 input_dim=n_mels,
                 output_dim=vocoder_input_dim,
                 latent_dim=latent_dim,
+                run_mode = self.run_mode,
             ),
             CFM(
                 cond_dim=n_mels,
@@ -52,6 +54,7 @@ class Enhancer(nn.Module):
                 solver_nfe=self.hp.cfm_solver_nfe,
                 solver_method=self.hp.cfm_solver_method,
                 time_mapping_divisor=self.hp.cfm_time_mapping_divisor,
+                run_mode = self.run_mode,
             ),
             z_scale=self.hp.lcfm_z_scale,
         )
@@ -60,7 +63,7 @@ class Enhancer(nn.Module):
 
         self.mel_fn = MelSpectrogram(hp)
         self.vocoder = UnivNet(self.hp, vocoder_input_dim)
-        self.denoiser = load_denoiser(self.hp.denoiser_run_dir, "cpu")
+        self.denoiser = load_denoiser(self.hp.denoiser_run_dir, "cpu", self.run_mode)
         self.normalizer = Normalizer()
 
         self._eval_lambd = 0.0
@@ -70,7 +73,12 @@ class Enhancer(nn.Module):
 
         if self.hp.enhancer_stage1_run_dir is not None:
             pretrained_path = self.hp.enhancer_stage1_run_dir / "ds/G/default/mp_rank_00_model_states.pt"
-            self._load_pretrained(pretrained_path)
+            if self.run_mode == "fp_16":
+                self._load_pretrained(pretrained_path).half()
+            else:
+                self._load_pretrained(pretrained_path)
+            
+            
 
         logger.info(f"{self.__class__.__name__} summary")
         logger.info(f"{self.summarize()}")
@@ -80,9 +88,14 @@ class Enhancer(nn.Module):
         cfm_state_dict = {k: v.clone() for k, v in self.lcfm.cfm.state_dict().items()}
         denoiser_state_dict = {k: v.clone() for k, v in self.denoiser.state_dict().items()}
         state_dict = torch.load(path, map_location="cpu")["module"]
-        self.load_state_dict(state_dict, strict=False)
-        self.lcfm.cfm.load_state_dict(cfm_state_dict)  # Reset cfm
-        self.denoiser.load_state_dict(denoiser_state_dict)  # Reset denoiser
+        if self.run_mode == "fp_16":
+            self.load_state_dict(state_dict, strict=False).half()
+            self.lcfm.cfm.load_state_dict(cfm_state_dict).half() # Reset cfm
+            self.denoiser.load_state_dict(denoiser_state_dict).half()# Reset denoiser
+        else:
+            self.load_state_dict(state_dict, strict=False)
+            self.lcfm.cfm.load_state_dict(cfm_state_dict) # Reset cfm
+            self.denoiser.load_state_dict(denoiser_state_dict)
         logger.info(f"Loaded pretrained model from {path}")
 
     def summarize(self):
@@ -102,6 +115,7 @@ class Enhancer(nn.Module):
         Returns:
             o: (b c t), mels
         """
+        x = x.to(torch.float16)
         if drop_last:
             return self.mel_fn(x)[..., :-1]  # (b d t)
         return self.mel_fn(x)

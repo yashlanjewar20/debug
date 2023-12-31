@@ -9,6 +9,7 @@ from torch.nn.utils.parametrizations import weight_norm
 
 from .alias_free_torch import DownSample1d, UpSample1d
 
+run_mode = "fp_32"
 
 class SnakeBeta(nn.Module):
     """
@@ -75,8 +76,8 @@ class UpActDown(nn.Module):
         self.up_ratio = up_ratio
         self.down_ratio = down_ratio
         self.act = act
-        self.upsample = UpSample1d(up_ratio, up_kernel_size)
-        self.downsample = DownSample1d(down_ratio, down_kernel_size)
+        self.upsample = UpSample1d(run_mode, up_ratio, up_kernel_size)
+        self.downsample = DownSample1d(run_mode, down_ratio, down_kernel_size)
 
     def forward(self, x):
         # x: [B,C,T]

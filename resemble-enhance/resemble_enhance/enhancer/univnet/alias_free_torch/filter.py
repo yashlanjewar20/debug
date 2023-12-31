@@ -25,7 +25,7 @@ else:
 # This code is adopted from adefossez's julius.lowpass.LowPassFilters under the MIT License
 # https://adefossez.github.io/julius/julius/lowpass.html
 #   LICENSE is in incl_licenses directory.
-def kaiser_sinc_filter1d(cutoff, half_width, kernel_size): # return filter [1,1,kernel_size]
+def kaiser_sinc_filter1d(cutoff, half_width, kernel_size, run_mode): # return filter [1,1,kernel_size]
     even = (kernel_size % 2 == 0)
     half_size = kernel_size // 2
 
@@ -38,7 +38,15 @@ def kaiser_sinc_filter1d(cutoff, half_width, kernel_size): # return filter [1,1,
         beta = 0.5842 * (A - 21)**0.4 + 0.07886 * (A - 21.)
     else:
         beta = 0.
-    window = torch.kaiser_window(kernel_size, beta=beta, periodic=False)
+        
+        
+    #kernel_size_int = kernel_size.item() if torch.is_tensor(kernel_size) else kernel_size
+
+    window = torch.kaiser_window(kernel_size, beta=beta, periodic=False, dtype=torch.float32)
+
+    if run_mode =="fp_16": 
+        window = window.half()
+
 
     # ratio = 0.5/cutoff -> 2 * cutoff = 1 / ratio
     if even:
@@ -59,6 +67,7 @@ def kaiser_sinc_filter1d(cutoff, half_width, kernel_size): # return filter [1,1,
 
 class LowPassFilter1d(nn.Module):
     def __init__(self,
+                 run_mode,
                  cutoff=0.5,
                  half_width=0.6,
                  stride: int = 1,
@@ -79,7 +88,7 @@ class LowPassFilter1d(nn.Module):
         self.stride = stride
         self.padding = padding
         self.padding_mode = padding_mode
-        filter = kaiser_sinc_filter1d(cutoff, half_width, kernel_size)
+        filter = kaiser_sinc_filter1d(cutoff, half_width, kernel_size, run_mode)
         self.register_buffer("filter", filter)
 
     #input [B, C, T]

@@ -29,10 +29,10 @@ class Denoiser(nn.Module):
     def eps(self):
         return 1e-7
 
-    def __init__(self, hp: HParams):
+    def __init__(self, run_mode, hp: HParams):
         super().__init__()
         self.hp = hp
-        self.net = UNet(input_dim=3, output_dim=3)
+        self.net = UNet(input_dim=3, output_dim=3, run_mode=run_mode)
         self.mel_fn = MelSpectrogram(hp)
 
         self.dummy: Tensor

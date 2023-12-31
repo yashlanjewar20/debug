@@ -19,7 +19,7 @@ class WNLayer(nn.Module):
     A DiffWave-like WN
     """
 
-    def __init__(self, hidden_dim, local_dim, global_dim, kernel_size, dilation):
+    def __init__(self, hidden_dim, local_dim, global_dim, kernel_size, dilation, run_mode):
         super().__init__()
 
         local_output_dim = hidden_dim * 2
@@ -33,8 +33,13 @@ class WNLayer(nn.Module):
         self.dconv = nn.Conv1d(hidden_dim, local_output_dim, kernel_size, dilation=dilation, padding="same")
 
         self.out = nn.Conv1d(hidden_dim, 2 * hidden_dim, kernel_size=1)
+        
+        
+        self.run_mode = run_mode
 
     def forward(self, z, l, g):
+        if self.run_mode == "fp_16":
+            z = z.to(torch.float16)
         identity = z
 
         if g is not None:
@@ -63,6 +68,7 @@ class WN(nn.Module):
         self,
         input_dim,
         output_dim,
+        run_mode,
         local_dim=None,
         global_dim=None,
         n_layers=30,
@@ -78,6 +84,7 @@ class WN(nn.Module):
         self.hidden_dim = hidden_dim
         self.local_dim = local_dim
         self.global_dim = global_dim
+        self.run_mode = run_mode
 
         self.start = nn.Conv1d(input_dim, hidden_dim, 1)
         if local_dim is not None:
@@ -91,6 +98,7 @@ class WN(nn.Module):
                     global_dim=global_dim,
                     kernel_size=kernel_size,
                     dilation=2 ** (i % dilation_cycle),
+                    run_mode = self.run_mode,
                 )
                 for i in range(n_layers)
             ]
@@ -105,6 +113,8 @@ class WN(nn.Module):
             l: local condition (b c t)
             g: global condition (b d)
         """
+        if self.run_mode == "fp_16":
+            z = z.to(torch.float16)
         z = self.start(z)
 
         if l is not None:

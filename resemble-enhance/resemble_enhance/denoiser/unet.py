@@ -1,5 +1,6 @@
 import torch.nn.functional as F
 from torch import nn
+import torch
 
 
 class PreactResBlock(nn.Sequential):
@@ -51,10 +52,11 @@ class UNetBlock(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim=16, num_blocks=4, num_middle_blocks=2):
+    def __init__(self, input_dim, output_dim, run_mode, hidden_dim=16, num_blocks=4, num_middle_blocks=2):
         super().__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
+        self.run_mode = run_mode
         self.input_proj = nn.Conv2d(input_dim, hidden_dim, 3, padding=1)
         self.encoder_blocks = nn.ModuleList(
             [
@@ -100,7 +102,9 @@ class UNet(nn.Module):
             o: (b c h w), output
         """
         shape = x.shape
-
+        if self.run_mode == "fp_16":
+            x = x.to(torch.float16)
+            
         x = self.pad_to_fit(x)
         x = self.input_proj(x)
 
@@ -136,7 +140,7 @@ class UNet(nn.Module):
 
 
 def main():
-    model = UNet(3, 3)
+    model = UNet(3, 3, "fp_32")
     model.test()
 
 

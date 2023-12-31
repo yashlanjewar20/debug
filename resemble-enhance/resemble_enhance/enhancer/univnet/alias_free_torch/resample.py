@@ -8,7 +8,7 @@ from .filter import kaiser_sinc_filter1d
 
 
 class UpSample1d(nn.Module):
-    def __init__(self, ratio=2, kernel_size=None):
+    def __init__(self, run_mode, ratio=2, kernel_size=None):
         super().__init__()
         self.ratio = ratio
         self.kernel_size = int(6 * ratio // 2) * 2 if kernel_size is None else kernel_size
@@ -18,7 +18,8 @@ class UpSample1d(nn.Module):
         self.pad_right = self.pad * self.stride + (self.kernel_size - self.stride + 1) // 2
         filter = kaiser_sinc_filter1d(cutoff=0.5 / ratio,
                                       half_width=0.6 / ratio,
-                                      kernel_size=self.kernel_size)
+                                      kernel_size=self.kernel_size,
+                                      run_mode = run_mode)
         self.register_buffer("filter", filter)
 
     # x: [B, C, T]
@@ -34,14 +35,16 @@ class UpSample1d(nn.Module):
 
 
 class DownSample1d(nn.Module):
-    def __init__(self, ratio=2, kernel_size=None):
+    def __init__(self, run_mode, ratio=2,  kernel_size=None):
         super().__init__()
         self.ratio = ratio
         self.kernel_size = int(6 * ratio // 2) * 2 if kernel_size is None else kernel_size
-        self.lowpass = LowPassFilter1d(cutoff=0.5 / ratio,
+        self.lowpass = LowPassFilter1d(run_mode= run_mode,
+                                       cutoff=0.5 / ratio,
                                        half_width=0.6 / ratio,
                                        stride=ratio,
-                                       kernel_size=self.kernel_size)
+                                       kernel_size=self.kernel_size
+                                       )
 
     def forward(self, x):
         xx = self.lowpass(x)
